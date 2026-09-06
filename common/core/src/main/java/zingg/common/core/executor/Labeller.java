@@ -17,16 +17,31 @@ import zingg.common.client.util.DFObjectUtil;
 import zingg.common.core.preprocess.IPreprocessors;
 import zingg.common.core.util.LabellerUtil;
 
+import java.util.Arrays;
+import java.util.Optional;
+
 public abstract class Labeller<S,D,R,C,T> extends ZinggBase<S,D,R,C,T> implements IPreprocessors<S,D,R,C,T> {
 
-	public static final Integer QUIT_LABELING = 9;
-	public static final Integer INCREMENT = 1;
+	public enum LabelChoice {
+		NOT_A_MATCH(0), MATCH(1), NOT_SURE(2), QUIT(9);
+
+		final int code;
+		LabelChoice(int code) { this.code = code; }
+
+		public static Optional<LabelChoice> fromCode(int code) {
+			return Arrays.stream(values()).filter(c -> c.code == code).findFirst();
+		}
+	}
+
+	public static final int QUIT_LABELING = 9;
+	public static final int INCREMENT = 1;
 	private static final long serialVersionUID = 1L;
-	protected static String name = "zingg.common.core.executor.Labeller";
-	public static final Log LOG = LogFactory.getLog(Labeller.class);
+	protected static final Log LOG = LogFactory.getLog(Labeller.class);
 	protected ITrainingDataModel<S, D, R, C> trainingDataModel;
 	protected ILabelDataViewHelper<S, D, R, C> labelDataViewHelper;
 	
+	private Scanner cliScanner = new Scanner(System.in);
+
 	public Labeller() {
 		setZinggOption(ZinggOptions.LABEL);
 	}
@@ -45,34 +60,38 @@ public abstract class Labeller<S,D,R,C,T> extends ZinggBase<S,D,R,C,T> implement
 				getTrainingDataModel().writeLabelledOutput(postProcessedLabelledRecords,args);
 			}
 			LOG.info("Finished labelling phase");
+		} catch (ZinggClientException zce) {
+			throw zce;
 		} catch (Exception e) {
 			throw new ZinggClientException("Error in labelling phase ", e);
 		}
 	}
 
 	
-	public ZFrame<D,R,C> getUnmarkedRecords() {
+	public ZFrame<D,R,C> getUnmarkedRecords() throws ZinggClientException {
 		ZFrame<D,R,C> unmarkedRecords = null;
 		ZFrame<D,R,C> markedRecords = null;
 		try {
 			unmarkedRecords = getPipeUtil().read(false, false, getModelHelper().getTrainingDataUnmarkedPipe(args));
 			try {
 				markedRecords = getPipeUtil().read(false, false, getModelHelper().getTrainingDataMarkedPipe(args));
-			} catch (Exception e) {
-				LOG.warn("No record has been marked yet");
 			} catch (ZinggClientException zce) {
-					LOG.warn("No record has been marked yet");
+				LOG.warn("No record has been marked yet", zce);
+			} catch (Exception e) {
+				LOG.warn("No record has been marked yet", e);
 			}			
 			if (markedRecords != null ) {
 				unmarkedRecords = unmarkedRecords.join(markedRecords,ColName.CLUSTER_COLUMN, false,
 						"left_anti");
 				getTrainingDataModel().setMarkedRecordsStat(markedRecords);
 			} 
-		} catch (Exception e) {
-			LOG.warn("No unmarked record for labelling");
 		} catch (ZinggClientException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
+			throw new ZinggClientException("No unmarked record for labelling", e1);
+		} catch (Exception e) {
+			throw new ZinggClientException("No unmarked record for labelling", e);
+		}
+		if (unmarkedRecords == null) {
+			throw new ZinggClientException("No unmarked record for labelling");
 		}
 		return unmarkedRecords;
 	}
@@ -132,8 +151,8 @@ public abstract class Labeller<S,D,R,C,T> extends ZinggBase<S,D,R,C,T> implement
 				LOG.warn("Processing finished.");
 				return updatedRecords;
 			} catch (Exception e) {
-				LOG.warn("Labelling error has occured " + e.getMessage());
-				throw new ZinggClientException("An error has occured while Labelling.", e);
+				LOG.warn("Labelling error has occurred " + e.getMessage());
+				throw new ZinggClientException("An error has occurred while Labelling.", e);
 			}
 		} else {
 			LOG.info("It seems there are no unmarked records at this moment. Please run findTrainingData job to build some pairs to be labelled and then run this labeler.");
@@ -150,17 +169,17 @@ public abstract class Labeller<S,D,R,C,T> extends ZinggBase<S,D,R,C,T> implement
 
 
 	int readCliInput() {
-		Scanner sc = new Scanner(System.in);
-
-		while (!sc.hasNext("[0129]")) {
-			sc.next();
-			System.out.println("Nope, please enter one of the allowed options!");
+		while (true) {
+			if (cliScanner.hasNextInt()) {
+				int selection = cliScanner.nextInt();
+				if (LabelChoice.fromCode(selection).isPresent()) {
+					return selection;
+				}
+			} else {
+				cliScanner.next(); // consume non-integer token
+			}
+			System.out.println("Nope, please enter one of the allowed options (0, 1, 2, 9)!");
 		}
-		String word = sc.next();
-		int selection = Integer.parseInt(word);
-		// sc.close();
-
-		return selection;
 	}
 
 	@Override

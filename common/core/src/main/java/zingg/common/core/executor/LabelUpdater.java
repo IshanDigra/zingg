@@ -66,7 +66,7 @@ public abstract class LabelUpdater<S,D,R,C,T> extends Labeller<S,D,R,C,T> {
 		do {
 			System.out.print("\n\tPlease enter the cluster id (or 9 to exit): ");
 			String cluster_id = sc.next();
-			if (cluster_id.equals(QUIT_LABELING.toString())) {
+			if (cluster_id.equals(String.valueOf(QUIT_LABELING))) {
 				LOG.info("User has exit in the middle. Updating the records.");
 				break;
 			}
