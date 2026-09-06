@@ -370,7 +370,7 @@ public abstract class Client<S,D,R,C,T> implements Serializable {
 		return zingg.getMarkedRecords();
 	}
 
-	public ZFrame<D,R,C>  getUnmarkedRecords() {
+	public ZFrame<D,R,C>  getUnmarkedRecords() throws ZinggClientException {
 		return zingg.getUnmarkedRecords();
 	}
 
